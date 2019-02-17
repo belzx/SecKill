@@ -468,29 +468,6 @@ public class SeckillServiceImpl implements ISeckillService {
         return seckill;
     }
 
-    /**
-     * 应用于在秒杀业务场景下，抢购信息的单条查询
-     * 使用二级缓存
-     * 1：redis
-     *
-     * @param seckillId
-     * @return
-     */
-    public Seckill updateSeckillBySeckill(long seckillId) {
-        //获取一条秒杀的商品的信息
-        //缓存中 读多，写少
-        //1：从redis获取
-        //2：从mysql获取
-        Seckill seckill = (Seckill) redisService.get(SECKILL_CACHE + seckillId);
-        if (seckill == null) {
-            seckill = seckillMapper.findBySeckillId(seckillId);
-            if (seckill != null) {
-                redisService.set(SECKILL_CACHE + seckillId, seckill, getRandomExpireTime(seckill.getEndTime()));
-            }
-        }
-        return seckill;
-    }
-
     private long getRandomExpireTime(Date endTime) {
         return (endTime.getTime() - System.currentTimeMillis()) / 1000 + (long) (Math.random() * 1000);
     }
