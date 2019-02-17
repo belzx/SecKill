@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.lizhi.dao.SeckillMapper">
+    <resultMap id="seckillResult" type="com.lizhi.bean.Seckill">
+        <result column="seckill_id" property="seckillId" javaType="long" jdbcType="BIGINT"/>
+        <result column="stock_count" property="stockCount" javaType="long" jdbcType="BIGINT"/>
+        <result column="title" property="title" javaType="String" jdbcType="VARCHAR"/>
+        <result column="image" property="image" javaType="String" jdbcType="VARCHAR"/>
+        <result column="price" property="price" javaType="BigDecimal" jdbcType="DECIMAL"/>
+        <result column="cost_price" property="costPrice" javaType="BigDecimal" jdbcType="DECIMAL"/>
+        <result column="status" property="status" javaType="int" jdbcType="INTEGER"/>
+        <result column="create_time" property="createTime" javaType="java.util.Date" jdbcType="TIMESTAMP"/>
+        <result column="start_time" property="startTime" javaType="java.util.Date" jdbcType="TIMESTAMP"/>
+        <result column="end_time" property="endTime" javaType="java.util.Date" jdbcType="TIMESTAMP"/>
+    </resultMap>
+    <!--减少库存数量-->
+    <update id="reduceStock">
+        UPDATE seckill
+          SET stock_count = stock_count - 1
+        WHERE seckill_id = #{seckillId}
+        <![CDATA[
+        AND start_time < #{killTime}
+        AND end_time >= #{killTime}
+          ]]>
+        AND stock_count > 0
+        AND status = 1
+    </update>
+
+    <!--插入订单-->
+    <insert id="insertOrder">
+        INSERT ignore INTO seckill_order(seckill_id, money, user_phone)
+        VALUES (#{seckillId}, #{money}, #{userPhone})
+    </insert>
+
+    <!--查询秒杀-->
+    <select id="findBySeckillId" resultMap="seckillResult">
+        select
+          *
+          from seckill
+          where seckill_id = #{seckillId}
+    </select>
+
+    <!--查询所有秒杀-->
+    <select id="findSeckillAll" resultMap="seckillResult">
+        select
+          *
+          from seckill
+          where
+           status = 1
+    </select>
+</mapper>
