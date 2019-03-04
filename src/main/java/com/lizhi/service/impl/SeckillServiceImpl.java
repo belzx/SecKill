@@ -2,11 +2,11 @@ package com.lizhi.service.impl;
 
 import com.lizhi.bean.Exposer;
 import com.lizhi.bean.Seckill;
-import com.lizhi.cache.RedisService;
 import com.lizhi.dao.SeckillMapper;
 import com.lizhi.exception.FailedSeckillException;
 import com.lizhi.exception.RepeatSeckillException;
 import com.lizhi.exception.SeckillCloseException;
+import com.lizhi.service.IRedisBloomFilter;
 import com.lizhi.service.ISeckillService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -45,17 +45,16 @@ public class SeckillServiceImpl implements ISeckillService {
     @Resource
     public RedisService redisService;
 
+    IRedisBloomFilter bloomFilter;
+
     /**
      * 预缓存所有的秒杀的id
      * 这个过滤需要自己去维护，每删除或增加一条，都需要，维护到redis缓存中。
      */
     @PostConstruct
     private void init(){
-
-        List<Seckill> seckillAll = this.seckillMapper.findSeckillAll();
-        seckillAll.forEach(d -> {
-            redisService.setBit(SECKILLID_BLOOM_FILTER,(long) (d.getSeckillId() % bloomsize),true);
-        });
+        bloomFilter = redisService.getBloomFilter(0.000001, Integer.MAX_VALUE);
+//        bloomFilter.init(SECKILLID_BLOOM_FILTER,);//不初始化，则默认缓存无期限
     }
 
     @Override
@@ -106,10 +105,10 @@ public class SeckillServiceImpl implements ISeckillService {
         //bloom中如果存在这个订单，则返回true
         //如果为false，则
         String bloomValue = String.valueOf(seckillGoodsId) + String.valueOf(userPhone);
-        if(!redisService.getBit(SECKILLORDER_BLOOM_FILTER,(long) (bloomValue.hashCode() % bloomsize))){
+        if(!bloomFilter.contains(SECKILLORDER_BLOOM_FILTER,bloomValue)){
             if(seckillMapper.insertOrder(seckillGoodsId, seckill.getCostPrice(), userPhone) == 0){
                 //更新bloom
-                redisService.setBit(SECKILLORDER_BLOOM_FILTER,(long) (bloomValue.hashCode() % bloomsize),true);
+                bloomFilter.add(SECKILLORDER_BLOOM_FILTER,bloomValue);
                 throw new RepeatSeckillException("订单重复");//重复订单
             }
         }else {
@@ -119,7 +118,7 @@ public class SeckillServiceImpl implements ISeckillService {
         //6:开始执行秒杀策略
         if (seckillMapper.reduceStock(seckillGoodsId, new Date()) > 0) {
             //更新bloom
-            redisService.setBit(SECKILLORDER_BLOOM_FILTER,(long) (bloomValue.hashCode() % bloomsize),true);
+            bloomFilter.add(SECKILLORDER_BLOOM_FILTER,bloomValue);
             return true;
         } else {
             //秒杀失败,交给事务处理回滚
@@ -149,7 +148,6 @@ public class SeckillServiceImpl implements ISeckillService {
         }
         return seckill;
     }
-
 
     private long getRandomExpireTime(Date endTime) {
         return (endTime.getTime() - System.currentTimeMillis()) / 1000 + (long) (Math.random() * 1000);
